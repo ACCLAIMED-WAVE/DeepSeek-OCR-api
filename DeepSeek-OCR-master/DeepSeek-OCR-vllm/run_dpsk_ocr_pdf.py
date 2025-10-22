@@ -148,7 +148,7 @@ def extract_coordinates_and_label(ref_text, image_width, image_height):
     return (label_type, cor_list)
 
 
-def draw_bounding_boxes(image, refs, jdx):
+def draw_bounding_boxes(image, refs, jdx, output_path):
 
     image_width, image_height = image.size
     img_draw = image.copy()
@@ -183,7 +183,7 @@ def draw_bounding_boxes(image, refs, jdx):
                     if label_type == 'image':
                         try:
                             cropped = image.crop((x1, y1, x2, y2))
-                            cropped.save(f"{OUTPUT_PATH}/images/{jdx}_{img_idx}.jpg")
+                            cropped.save(f"{output_path}/images/{jdx}_{img_idx}.jpg")
                         except Exception as e:
                             print(e)
                             pass
@@ -215,14 +215,13 @@ def draw_bounding_boxes(image, refs, jdx):
     return img_draw
 
 
-def process_image_with_refs(image, ref_texts, jdx):
-    result_image = draw_bounding_boxes(image, ref_texts, jdx)
+def process_image_with_refs(image, ref_texts, jdx, output_path):
+    result_image = draw_bounding_boxes(image, ref_texts, jdx, output_path)
     return result_image
 
 
-def process_single_image(image):
+def process_single_image(image, prompt_in):
     """single image"""
-    prompt_in = prompt
     cache_item = {
         "prompt": prompt_in,
         "multi_modal_data": {"image": DeepseekOCRProcessor().tokenize_with_images(images = [image], bos=True, eos=True, cropping=CROP_MODE)},
@@ -230,15 +229,28 @@ def process_single_image(image):
     return cache_item
 
 
-if __name__ == "__main__":
+def run_ocr_on_pdf(llm, sampling_params, input_pdf_path: str, output_dir: str):
+    """
+    Processes a PDF file to extract text, layout, and images.
 
-    os.makedirs(OUTPUT_PATH, exist_ok=True)
-    os.makedirs(f'{OUTPUT_PATH}/images', exist_ok=True)
+    Args:
+        llm: The initialized VLLM model.
+        sampling_params: The sampling parameters for generation.
+        input_pdf_path: Path to the input PDF file.
+        output_dir: Directory to save the output files.
+
+    Returns:
+        A tuple containing:
+        - The final markdown content.
+        - A list of paths to the extracted images.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    os.makedirs(f'{output_dir}/images', exist_ok=True)
     
     print(f'{Colors.RED}PDF loading .....{Colors.RESET}')
 
 
-    images = pdf_to_images_high_quality(INPUT_PATH)
+    images = pdf_to_images_high_quality(input_pdf_path)
 
 
     prompt = PROMPT
@@ -247,7 +259,7 @@ if __name__ == "__main__":
 
     with ThreadPoolExecutor(max_workers=NUM_WORKERS) as executor:  
         batch_inputs = list(tqdm(
-            executor.map(process_single_image, images),
+            executor.map(lambda image: process_single_image(image, prompt), images),
             total=len(images),
             desc="Pre-processed images"
         ))
@@ -271,17 +283,14 @@ if __name__ == "__main__":
     )
 
 
-    output_path = OUTPUT_PATH
-
-    os.makedirs(output_path, exist_ok=True)
-
-
-    mmd_det_path = output_path + '/' + INPUT_PATH.split('/')[-1].replace('.pdf', '_det.mmd')
-    mmd_path = output_path + '/' + INPUT_PATH.split('/')[-1].replace('pdf', 'mmd')
-    pdf_out_path = output_path + '/' + INPUT_PATH.split('/')[-1].replace('.pdf', '_layouts.pdf')
+    mmd_det_path = os.path.join(output_dir, os.path.basename(input_pdf_path).replace('.pdf', '_det.mmd'))
+    mmd_path = os.path.join(output_dir, os.path.basename(input_pdf_path).replace('.pdf', '.mmd'))
+    pdf_out_path = os.path.join(output_dir, os.path.basename(input_pdf_path).replace('.pdf', '_layouts.pdf'))
+    
     contents_det = ''
     contents = ''
     draw_images = []
+    all_image_paths = []
     jdx = 0
     for output, img in zip(outputs_list, images):
         content = output.outputs[0].text
@@ -301,14 +310,17 @@ if __name__ == "__main__":
 
         matches_ref, matches_images, mathes_other = re_match(content)
         # print(matches_ref)
-        result_image = process_image_with_refs(image_draw, matches_ref, jdx)
+        result_image = process_image_with_refs(image_draw, matches_ref, jdx, output_dir)
 
 
         draw_images.append(result_image)
 
 
         for idx, a_match_image in enumerate(matches_images):
-            content = content.replace(a_match_image, f'![](images/' + str(jdx) + '_' + str(idx) + '.jpg)\n')
+            image_filename = f'{jdx}_{idx}.jpg'
+            image_path = os.path.join(output_dir, 'images', image_filename)
+            all_image_paths.append(image_path)
+            content = content.replace(a_match_image, f'![](images/{image_filename})\n')
 
         for idx, a_match_other in enumerate(mathes_other):
             content = content.replace(a_match_other, '').replace('\\coloneqq', ':=').replace('\\eqqcolon', '=:').replace('\n\n\n\n', '\n\n').replace('\n\n\n', '\n\n')
@@ -327,4 +339,19 @@ if __name__ == "__main__":
 
 
     pil_to_pdf_img2pdf(draw_images, pdf_out_path)
+    
+    return contents, all_image_paths
+
+
+if __name__ == "__main__":
+
+    os.makedirs(OUTPUT_PATH, exist_ok=True)
+    os.makedirs(f'{OUTPUT_PATH}/images', exist_ok=True)
+    
+    run_ocr_on_pdf(
+        llm=llm,
+        sampling_params=sampling_params,
+        input_pdf_path=INPUT_PATH,
+        output_dir=OUTPUT_PATH
+    )
 
