@@ -16,6 +16,7 @@ NUM_WORKERS = 32
 PRINT_NUM_VIS_TOKENS = False
 SKIP_REPEAT = True
 MODEL_PATH = 'deepseek-ai/DeepSeek-OCR' # change to your model path
+GPU_MEMORY_UTILIZATION = 0.5
 
 # TODO: change INPUT_PATH
 # .pdf: run_dpsk_ocr_pdf.py; 

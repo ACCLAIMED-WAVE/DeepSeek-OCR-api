@@ -17,7 +17,7 @@ os.environ['VLLM_USE_V1'] = '0'
 os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 
 
-from config import MODEL_PATH, INPUT_PATH, OUTPUT_PATH, PROMPT, SKIP_REPEAT, MAX_CONCURRENCY, NUM_WORKERS, CROP_MODE
+from config import MODEL_PATH, INPUT_PATH, OUTPUT_PATH, PROMPT, SKIP_REPEAT, MAX_CONCURRENCY, NUM_WORKERS, CROP_MODE, GPU_MEMORY_UTILIZATION
 
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np
@@ -42,7 +42,7 @@ llm = LLM(
     swap_space=0,
     max_num_seqs=MAX_CONCURRENCY,
     tensor_parallel_size=1,
-    gpu_memory_utilization=0.9,
+    gpu_memory_utilization=GPU_MEMORY_UTILIZATION,
     disable_mm_preprocessor_cache=True
 )
 
