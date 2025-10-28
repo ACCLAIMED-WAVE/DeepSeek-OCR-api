@@ -1,7 +1,7 @@
 to run the API 
 
 ```
-cd DeepSeek-OCR-master-DeepSeek-OCR-vllm
+cd DeepSeek-OCR-master/DeepSeek-OCR-vllm
 python api.py
 ```
 

@@ -6,7 +6,10 @@ import re
 from tqdm import tqdm
 import torch
 from concurrent.futures import ThreadPoolExecutor
- 
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 if torch.version.cuda == '11.8':
     os.environ["TRITON_PTXAS_PATH"] = "/usr/local/cuda-11.8/bin/ptxas"
@@ -247,22 +250,22 @@ def run_ocr_on_pdf(llm, sampling_params, input_pdf_path: str, output_dir: str):
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs(f'{output_dir}/images', exist_ok=True)
     
-    print(f'{Colors.RED}PDF loading .....{Colors.RESET}')
-
-
+    logger.debug(f'{Colors.RED}PDF loading .....{Colors.RESET}')
     images = pdf_to_images_high_quality(input_pdf_path)
+    logger.debug(f'{Colors.RED}PDF loaded {len(images)} images{Colors.RESET}')
 
 
     prompt = PROMPT
 
     # batch_inputs = []
-
+    logger.debug(f'{Colors.RED}Processing images with {NUM_WORKERS} workers{Colors.RESET}')
     with ThreadPoolExecutor(max_workers=NUM_WORKERS) as executor:  
         batch_inputs = list(tqdm(
             executor.map(lambda image: process_single_image(image, prompt), images),
             total=len(images),
             desc="Pre-processed images"
         ))
+    logger.debug(f'{Colors.RED}Images pre-processed{Colors.RESET}')
 
 
     # for image in tqdm(images):
@@ -276,12 +279,12 @@ def run_ocr_on_pdf(llm, sampling_params, input_pdf_path: str, output_dir: str):
     #     ]
     #     batch_inputs.extend(cache_list)
 
-
+    logger.debug(f'{Colors.RED}Generating outputs{Colors.RESET}')
     outputs_list = llm.generate(
         batch_inputs,
         sampling_params=sampling_params
     )
-
+    logger.debug(f'{Colors.RED}Outputs generated{Colors.RESET}')
 
     mmd_det_path = os.path.join(output_dir, os.path.basename(input_pdf_path).replace('.pdf', '_det.mmd'))
     mmd_path = os.path.join(output_dir, os.path.basename(input_pdf_path).replace('.pdf', '.mmd'))
@@ -292,53 +295,58 @@ def run_ocr_on_pdf(llm, sampling_params, input_pdf_path: str, output_dir: str):
     draw_images = []
     all_image_paths = []
     jdx = 0
+    logger.debug(f'{Colors.RED}Combining outputs{Colors.RESET}')
     for output, img in zip(outputs_list, images):
+        logger.debug(f'{Colors.BLUE}Processing output {jdx}{Colors.RESET}')
         content = output.outputs[0].text
 
         if '<｜end▁of▁sentence｜>' in content: # repeat no eos
+            logger.debug(f'{Colors.BLUE}Removing EOS token{Colors.RESET}')
             content = content.replace('<｜end▁of▁sentence｜>', '')
         else:
             if SKIP_REPEAT:
+                logger.debug(f'{Colors.BLUE}Skipping repeated content{Colors.RESET}')
                 continue
 
-        
+        logger.debug(f'{Colors.BLUE}Adding page split{Colors.RESET}')
         page_num = f'\n<--- Page Split --->'
 
         contents_det += content + f'\n{page_num}\n'
 
         image_draw = img.copy()
 
+        logger.debug(f'{Colors.BLUE}Processing references and matches{Colors.RESET}')
         matches_ref, matches_images, mathes_other = re_match(content)
         # print(matches_ref)
         result_image = process_image_with_refs(image_draw, matches_ref, jdx, output_dir)
 
-
         draw_images.append(result_image)
 
-
+        logger.debug(f'{Colors.BLUE}Processing {len(matches_images)} image matches{Colors.RESET}')
         for idx, a_match_image in enumerate(matches_images):
             image_filename = f'{jdx}_{idx}.jpg'
             image_path = os.path.join(output_dir, 'images', image_filename)
             all_image_paths.append(image_path)
             content = content.replace(a_match_image, f'![](images/{image_filename})\n')
 
+        logger.debug(f'{Colors.BLUE}Processing {len(mathes_other)} other matches{Colors.RESET}')
         for idx, a_match_other in enumerate(mathes_other):
             content = content.replace(a_match_other, '').replace('\\coloneqq', ':=').replace('\\eqqcolon', '=:').replace('\n\n\n\n', '\n\n').replace('\n\n\n', '\n\n')
 
-
         contents += content + f'\n{page_num}\n'
-
 
         jdx += 1
 
+    logger.debug(f'{Colors.RED}Writing outputs{Colors.RESET}')
     with open(mmd_det_path, 'w', encoding='utf-8') as afile:
         afile.write(contents_det)
 
     with open(mmd_path, 'w', encoding='utf-8') as afile:
         afile.write(contents)
 
-
+    logger.debug(f'{Colors.RED}Converting images to PDF{Colors.RESET}')
     pil_to_pdf_img2pdf(draw_images, pdf_out_path)
+    logger.debug(f'{Colors.RED}PDF converted{Colors.RESET}')
     
     return contents, all_image_paths
 
