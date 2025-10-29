@@ -115,8 +115,9 @@ def pil_to_pdf_img2pdf(pil_images, output_path):
     
     try:
         pdf_bytes = img2pdf.convert(image_bytes_list)
-        with open(output_path, "wb") as f:
-            f.write(pdf_bytes)
+        if pdf_bytes:
+            with open(output_path, "wb") as f:
+                f.write(pdf_bytes)
 
     except Exception as e:
         print(f"error: {e}")
@@ -246,6 +247,7 @@ def run_ocr_on_pdf(llm, sampling_params, input_pdf_path: str, output_dir: str):
         A tuple containing:
         - The final markdown content.
         - A list of paths to the extracted images.
+        - The path to the generated MMD file.
     """
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs(f'{output_dir}/images', exist_ok=True)
@@ -348,7 +350,7 @@ def run_ocr_on_pdf(llm, sampling_params, input_pdf_path: str, output_dir: str):
     pil_to_pdf_img2pdf(draw_images, pdf_out_path)
     logger.debug(f'{Colors.RED}PDF converted{Colors.RESET}')
     
-    return contents, all_image_paths
+    return contents, all_image_paths, mmd_path
 
 
 if __name__ == "__main__":

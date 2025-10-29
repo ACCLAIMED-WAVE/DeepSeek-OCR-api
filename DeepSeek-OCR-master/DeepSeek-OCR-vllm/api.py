@@ -25,6 +25,7 @@ class PDFProcessResponse(BaseModel):
     markdown_content: str
     image_paths: list[str]
     output_dir: str
+    mmd_file_path: str
 
 @app.on_event("startup")
 async def startup_event():
@@ -49,7 +50,7 @@ async def process_pdf_endpoint(request: PDFProcessRequest):
     
     try:
         # Run the synchronous OCR function in a thread pool with a timeout
-        markdown_content, image_paths = await asyncio.wait_for(
+        markdown_content, image_paths, mmd_file_path = await asyncio.wait_for(
             run_in_threadpool(
                 run_ocr_on_pdf,
                 llm=llm,
@@ -66,7 +67,8 @@ async def process_pdf_endpoint(request: PDFProcessRequest):
         return PDFProcessResponse(
             markdown_content=markdown_content,
             image_paths=absolute_image_paths,
-            output_dir=output_dir
+            output_dir=output_dir,
+            mmd_file_path=os.path.abspath(mmd_file_path)
         )
     except asyncio.TimeoutError:
         raise HTTPException(status_code=408, detail="Request timed out after 10 minutes.")
@@ -80,4 +82,4 @@ async def process_pdf_endpoint(request: PDFProcessRequest):
         raise HTTPException(status_code=500, detail=f"An internal error occurred: {str(e)}")
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=5050)
