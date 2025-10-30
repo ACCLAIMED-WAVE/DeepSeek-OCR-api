@@ -7,6 +7,7 @@ import uvicorn
 from fastapi.concurrency import run_in_threadpool
 import re
 import urllib.parse
+import logging
 
 # Import the refactored processing function from run_dpsk_ocr_pdf
 from run_dpsk_ocr_pdf import run_ocr_on_pdf, llm, sampling_params
@@ -76,7 +77,7 @@ async def process_pdf_endpoint(request: PDFProcessRequest):
         input_pdf_path = windows_to_wsl_path(request.file_path)
     
     logging.info(f'parsing {input_pdf_path}')
-    
+
     if not os.path.exists(input_pdf_path):
         raise HTTPException(status_code=404, detail="Input PDF file not found.")
 
