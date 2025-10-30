@@ -50,7 +50,7 @@ app = FastAPI(
 
 class PDFProcessRequest(BaseModel):
     file_path: str
-    convert_wsl_path: bool
+    convert_wsl_path: bool = False
 
 class PDFProcessResponse(BaseModel):
     markdown_content: str
