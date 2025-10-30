@@ -24,3 +24,9 @@ From it, you are to extract the following fields and return the response as a JS
 
 Parse the file and output the JSON only, do not output any additional text
 ```
+
+
+In WSL, use the following to get the IP
+```bash
+ip addr show eth0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}'
+```
